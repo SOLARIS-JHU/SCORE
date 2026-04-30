@@ -260,14 +260,13 @@ def main():
         rho_icnn = np.min(v_cycle_vals)
 
     # --- Metrics ---
-    # These numbers below come from the various exp on the other scripts
     rho_vals = {
         'SOS': 4.990614,        
         'SOS+EVT': 4.5409,      
-        'NLF': 0.7237, 
-        'Zubov': 0.6771, 
-        'ICNN': rho_icnn,
-        'EVT+Dict-Gram': 1.6123     
+        'NLF+SMT': 0.7237, 
+        'Zubov+SMT': 0.6771, 
+        'ICNN+SMT': rho_icnn,
+        'Dict-Gram+EVT': 1.6123     
     }
     
     metrics = {}
@@ -279,14 +278,15 @@ def main():
         area = calculate_area_ratio(mask, limit_cycle_mask)
         return cov, area
 
+    # Adjusted to match exactly the new keys
     metrics['SOS'] = get_metrics('SOS', V_poly_grid, rho_vals['SOS'])
     metrics['SOS+EVT'] = get_metrics('SOS+EVT', V_poly_grid, rho_vals['SOS+EVT'])
-    metrics['NLF'] = get_metrics('NLF', V_nlf_grid, rho_vals['NLF'])
-    metrics['Zubov'] = get_metrics('Zubov', V_zubov_grid, rho_vals['Zubov'])
-    metrics['ICNN'] = get_metrics('ICNN', V_icnn_grid, rho_vals['ICNN'])
-    
+    metrics['NLF+SMT'] = get_metrics('NLF+SMT', V_nlf_grid, rho_vals['NLF+SMT'])
+    metrics['Zubov+SMT'] = get_metrics('Zubov+SMT', V_zubov_grid, rho_vals['Zubov+SMT'])
+    metrics['ICNN+SMT'] = get_metrics('ICNN+SMT', V_icnn_grid, rho_vals['ICNN+SMT'])
+
     if V_evt_dict_gram_grid is not None:
-        metrics['EVT+Dict-Gram'] = get_metrics('EVT+Dict-Gram', V_evt_dict_gram_grid, rho_vals['EVT+Dict-Gram'])
+        metrics['Dict-Gram+EVT'] = get_metrics('Dict-Gram+EVT', V_evt_dict_gram_grid, rho_vals['Dict-Gram+EVT'])
 
     print("\n=== ROA Comparison ===")
     print(f"SOS (Pure)    : ρ={rho_vals['SOS']:.4f}, Cov={metrics['SOS'][0]*100:.1f}%")
@@ -313,34 +313,34 @@ def main():
     ax.quiver(X_q, Y_q, U/M, V/M, pivot='mid', color='#666666', 
               scale=25, width=0.003, alpha=0.5, headwidth=4, headlength=5)
 
-    # B. High Contrast Styles
+    # B. High Contrast Styles - UPDATED KEYS
     styles = {
         'SOS':           ('#377eb8', ':',  2.5),  # Blue
         'SOS+EVT':       ('#000080', '-',  3.5),  # Navy Blue
-        'NLF':           ('#e41a1c', '--', 3.0),  # Bright Red
-        'Zubov':         ('#4daf4a', '-.', 3.0),  # Green
-        'ICNN':          ('#ff7f00', '-.', 3.0),  # Bright Orange
-        'EVT+Dict-Gram': ('#984ea3', '--', 3.0),  # Purple
+        'NLF+SMT':       ('#e41a1c', '--', 3.0),  # Bright Red
+        'Zubov+SMT':     ('#4daf4a', '-.', 3.0),  # Green
+        'ICNN+SMT':      ('#ff7f00', '-.', 3.0),  # Bright Orange
+        'Dict-Gram+EVT': ('#984ea3', '--', 3.0),  # Purple
     }
 
     # C. Plot Contours
     ax.contourf(X, Y, V_poly_grid, levels=[0, rho_vals['SOS+EVT']], 
                 colors=[styles['SOS+EVT'][0]], alpha=0.05)
 
-    # Draw Lines
+    # Draw Lines - UPDATED KEYS
     if has_icnn:
-        ax.contour(X, Y, V_icnn_grid, levels=[rho_vals['ICNN']], 
-                   colors=styles['ICNN'][0], linestyles=styles['ICNN'][1], linewidths=styles['ICNN'][2])
+        ax.contour(X, Y, V_icnn_grid, levels=[rho_vals['ICNN+SMT']], 
+                   colors=styles['ICNN+SMT'][0], linestyles=styles['ICNN+SMT'][1], linewidths=styles['ICNN+SMT'][2])
 
-    ax.contour(X, Y, V_nlf_grid, levels=[rho_vals['NLF']], 
-               colors=styles['NLF'][0], linestyles=styles['NLF'][1], linewidths=styles['NLF'][2])
+    ax.contour(X, Y, V_nlf_grid, levels=[rho_vals['NLF+SMT']], 
+               colors=styles['NLF+SMT'][0], linestyles=styles['NLF+SMT'][1], linewidths=styles['NLF+SMT'][2])
     
-    ax.contour(X, Y, V_zubov_grid, levels=[rho_vals['Zubov']], 
-               colors=styles['Zubov'][0], linestyles=styles['Zubov'][1], linewidths=styles['Zubov'][2])
+    ax.contour(X, Y, V_zubov_grid, levels=[rho_vals['Zubov+SMT']], 
+               colors=styles['Zubov+SMT'][0], linestyles=styles['Zubov+SMT'][1], linewidths=styles['Zubov+SMT'][2])
 
     if V_evt_dict_gram_grid is not None:
-        ax.contour(X, Y, V_evt_dict_gram_grid, levels=[rho_vals['EVT+Dict-Gram']], 
-                   colors=styles['EVT+Dict-Gram'][0], linestyles=styles['EVT+Dict-Gram'][1], linewidths=styles['EVT+Dict-Gram'][2])
+        ax.contour(X, Y, V_evt_dict_gram_grid, levels=[rho_vals['Dict-Gram+EVT']], 
+                   colors=styles['Dict-Gram+EVT'][0], linestyles=styles['Dict-Gram+EVT'][1], linewidths=styles['Dict-Gram+EVT'][2])
 
     ax.contour(X, Y, V_poly_grid, levels=[rho_vals['SOS']], 
                colors=styles['SOS'][0], linestyles=styles['SOS'][1], linewidths=styles['SOS'][2])
@@ -364,21 +364,22 @@ def main():
     # E. Legend
     def fmt_legend(name, metrics_dict):
         c, r = metrics_dict.get(name, (0,0))
+        # This will render full names with math-style bolding nicely in matplotlib
         return r"$\bf{" + name + r"}$" + r" ($\kappa$={0:.0f}%)".format(c*100)
 
-    # Legend
+    # Legend - UPDATED KEYS
     legend_elements = [
         Line2D([0], [0], color='black', lw=3.5, label='Limit Cycle'),
         Line2D([0], [0], color=styles['SOS'][0], linestyle=styles['SOS'][1], lw=styles['SOS'][2], label=fmt_legend('SOS', metrics)),
         Line2D([0], [0], color=styles['SOS+EVT'][0], linestyle=styles['SOS+EVT'][1], lw=styles['SOS+EVT'][2], label=fmt_legend('SOS+EVT', metrics)),
-        Line2D([0], [0], color=styles['NLF'][0], linestyle=styles['NLF'][1], lw=styles['NLF'][2], label=fmt_legend('NLF', metrics)),
-        Line2D([0], [0], color=styles['Zubov'][0], linestyle=styles['Zubov'][1], lw=styles['Zubov'][2], label=fmt_legend('Zubov', metrics)),
-        Line2D([0], [0], color=styles['ICNN'][0], linestyle=styles['ICNN'][1], lw=styles['ICNN'][2], label=fmt_legend('ICNN', metrics)),
+        Line2D([0], [0], color=styles['NLF+SMT'][0], linestyle=styles['NLF+SMT'][1], lw=styles['NLF+SMT'][2], label=fmt_legend('NLF+SMT', metrics)),
+        Line2D([0], [0], color=styles['Zubov+SMT'][0], linestyle=styles['Zubov+SMT'][1], lw=styles['Zubov+SMT'][2], label=fmt_legend('Zubov+SMT', metrics)),
+        Line2D([0], [0], color=styles['ICNN+SMT'][0], linestyle=styles['ICNN+SMT'][1], lw=styles['ICNN+SMT'][2], label=fmt_legend('ICNN+SMT', metrics)),
     ]
 
     if V_evt_dict_gram_grid is not None:
         legend_elements.append(
-            Line2D([0], [0], color=styles['EVT+Dict-Gram'][0], linestyle=styles['EVT+Dict-Gram'][1], lw=styles['EVT+Dict-Gram'][2], label=fmt_legend('EVT+Dict-Gram', metrics))
+            Line2D([0], [0], color=styles['Dict-Gram+EVT'][0], linestyle=styles['Dict-Gram+EVT'][1], lw=styles['Dict-Gram+EVT'][2], label=fmt_legend('Dict-Gram+EVT', metrics))
         )
 
     ax.legend(handles=legend_elements, loc='upper right', 
@@ -389,7 +390,7 @@ def main():
     
     # Save
     if not os.path.exists("plots"): os.makedirs("plots")
-    save_path = "plots/paper_roa_comparison_final_new.pdf"
+    save_path = "plots/paper_roa_comparison_final.pdf"
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     print(f"\nPlot saved to {save_path}")
 
