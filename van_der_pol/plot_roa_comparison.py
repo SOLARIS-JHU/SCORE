@@ -262,11 +262,11 @@ def main():
     # --- Metrics ---
     rho_vals = {
         'SOS': 4.990614,        
-        'SOS+EVT': 4.5409,      
+        'SOS+EVT': 4.5454,      
         'NLF+SMT': 0.7237, 
         'Zubov+SMT': 0.6771, 
         'ICNN+SMT': rho_icnn,
-        'Dict-Gram+EVT': 1.6123     
+        'Dict-Gram+EVT': 1.6277    
     }
     
     metrics = {}
@@ -390,7 +390,7 @@ def main():
     
     # Save
     if not os.path.exists("plots"): os.makedirs("plots")
-    save_path = "plots/paper_roa_comparison_final.pdf"
+    save_path = "plots/paper_roa_comparison_final_rsgld.pdf"
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     print(f"\nPlot saved to {save_path}")
 

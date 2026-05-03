@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import math
 import os
+import sys
 
 from commons import VanDerPol, ODEGramMatrixLyapunov
 from verify_evt import certify_with_evt, compute_V_Vdot
@@ -83,7 +84,11 @@ if __name__ == "__main__":
     print(f"{'Seed':<10} | {'EVT Upper Bound (CI)':<20} | {'Condition (CI > GT?)':<20}")
     print("-" * 55)
     
-    test_seeds = [1, 2, 3, 4, 5]
+    test_seeds = list(np.arange(0, 1000))
+    
+    # Trackers for the final statistics
+    valid_count = 0
+    invalid_count = 0
     
     for seed in test_seeds:
         # We must seed torch and numpy for the SGLD sampling to vary
@@ -91,7 +96,6 @@ if __name__ == "__main__":
         np.random.seed(seed)
         
         # Suppress EVT prints for a clean table
-        import sys, os
         old_stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
         
@@ -102,7 +106,26 @@ if __name__ == "__main__":
         sys.stdout = old_stdout
         
         is_valid = ci_upper >= (gt_gamma - 1e-5)
-        valid_str = "VALID (Conservative)" if is_valid else "INVALID (Underestimated)"
         
+        if is_valid:
+            valid_str = "VALID (Conservative)"
+            valid_count += 1
+        else:
+            valid_str = "INVALID (Underestimated)"
+            invalid_count += 1
+            
+        # Optional: Comment out the print below if you don't want 10,000 lines flooding your terminal
         print(f"{seed:<10} | {ci_upper:<20.6f} | {valid_str:<20}")
         
+    # --- Final Aggregation and Output ---
+    total_seeds = len(test_seeds)
+    success_rate = (valid_count / total_seeds) * 100
+    
+    print("\n" + "="*55)
+    print("FINAL EVT BENCHMARK RESULTS")
+    print("="*55)
+    print(f"Total Seeds Tested: {total_seeds}")
+    print(f"Valid Bounds (Conservative): {valid_count}")
+    print(f"Invalid Bounds (Underestimated): {invalid_count}")
+    print(f"Empirical Success Rate: {success_rate:.2f}%")
+    print("="*55)
