@@ -474,6 +474,6 @@ if __name__ == "__main__":
         exit()
             
     final_rho = find_robust_roa(physics, model)
-    print(f"\n >>> FINAL CERTIFIED ROA: rho = {final_rho:.4f}")
+    print(f"\n >>> FINAL CERTIFIED ROA: rho = {final_rho}")
     
     plot_representative_certification(physics, model, final_rho)

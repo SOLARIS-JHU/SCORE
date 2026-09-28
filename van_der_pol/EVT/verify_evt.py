@@ -90,7 +90,7 @@ def boundary_attack_batch(physics, model, u_init_batch, rho, steps=1000,
     u.requires_grad = True
     
     # --- PHASE 0: Initial Projection ---
-    u = project_on_boundary(u, model, rho, max_iter=10)
+    u = project_on_boundary(u, model, rho, max_iter=20)
         
     # --- MAIN LOOP ---
     for i in range(steps):

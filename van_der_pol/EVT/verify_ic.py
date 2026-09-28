@@ -5,57 +5,49 @@ import os
 import sys
 
 from commons import VanDerPol, ODEGramMatrixLyapunov
-from verify_evt import certify_with_evt, compute_V_Vdot
+from verify_evt_new import certify_with_evt, compute_V_Vdot
 
-def get_ground_truth_gamma(physics, model, rho, num_rays=10_000_000):
+def get_ground_truth_gamma_volume(physics, model, rho, rho_core=0.05, grid_size=4000):
     """
-    Computes the exact ground truth maximum of V_dot on the level set V(x) = rho
-    using ultra-dense polar ray-casting and Newton projection.
+    Computes the exact ground truth maximum of V_dot strictly inside the donut volume 
+    (rho_core <= V(x) <= rho) using an ultra-dense chunked 2D grid search.
     """
     model.eval()
     
-    # 1. Shoot `num_rays` uniformly across [0, 2pi]
-    theta = torch.linspace(0, 2 * math.pi, num_rays, device=physics.device).view(-1, 1)
-    dir_vecs = torch.cat([torch.cos(theta), torch.sin(theta)], dim=1)
+    # 1. Create a massive dense grid over the expected state space
+    x = torch.linspace(-3.5, 3.5, grid_size, device=physics.device)
+    y = torch.linspace(-3.5, 3.5, grid_size, device=physics.device)
+    X, Y = torch.meshgrid(x, y, indexing='ij')
     
-    # 2. Guess the radius (since V is roughly quadratic, V(r*dir) ~= r^2 * V(dir))
-    with torch.no_grad():
-        V_dir = model(dir_vecs)
-        r_init = torch.sqrt(rho / V_dir)
+    u_grid = torch.stack([X.flatten(), Y.flatten()], dim=1)
+    total_points = u_grid.shape[0]
     
-    # 3. Initialize points and prepare for gradient tracking
-    u = (dir_vecs * r_init).clone().detach()
-    u.requires_grad_(True)
+    print(f" [GROUND TRUTH] Scanning {total_points:,} grid points inside the donut volume...")
     
-    # 4. Exact Newton-Raphson Projection to snap perfectly onto V(x) = rho
-    for _ in range(20): # 20 steps should guarantee machine-precision convergence
-        V_curr = model(u)
-        err = V_curr - rho
+    # Process in chunks to prevent GPU Out-of-Memory errors
+    chunk_size = 2_000_000 
+    max_vdot = -float('inf')
+    points_in_donut = 0
+    
+    for i in range(0, total_points, chunk_size):
+        u_chunk = u_grid[i:i+chunk_size].clone()
+        u_chunk.requires_grad_(True)
         
-        grads = torch.autograd.grad(V_curr.sum(), u)[0]
-        grad_sq_norm = torch.sum(grads**2, dim=1, keepdim=True) + 1e-8
+        V_val, V_dot, _ = compute_V_Vdot(u_chunk, model, physics)
+        V_val = V_val.squeeze()
         
-        step = (err / grad_sq_norm) * grads
-        u.data = u.data - step
+        # 2. Filter points to only those exactly inside the donut
+        valid_mask = (V_val <= rho) & (V_val >= rho_core)
+        points_in_donut += valid_mask.sum().item()
         
-    # 5. Filter out any points that somehow didn't converge (safety check)
-    with torch.no_grad():
-        V_final = model(u)
-        valid_mask = (torch.abs(V_final - rho) < 1e-3).flatten()
-        u_valid = u[valid_mask]
-        
-    if len(u_valid) < num_rays * 0.9:
-        print(f" [WARNING] Only {len(u_valid)}/{num_rays} points converged to the boundary.")
-
-    # 6. Compute V_dot on these highly dense, exact boundary points
-    u_valid.requires_grad_(True)
-    _, V_dot, _ = compute_V_Vdot(u_valid, model, physics)
-    
-    # The absolute maximum is our Ground Truth gamma*
-    gamma_star = torch.max(V_dot).item()
-    
-    return gamma_star
-
+        if valid_mask.any():
+            vdot_valid = V_dot[valid_mask]
+            chunk_max = torch.max(vdot_valid).item()
+            if chunk_max > max_vdot:
+                max_vdot = chunk_max
+                
+    print(f" [GROUND TRUTH] Found {points_in_donut:,} points valid within the donut bounds.")
+    return max_vdot
 
 if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -72,19 +64,22 @@ if __name__ == "__main__":
     
     model.load_state_dict(torch.load(model_path, map_location=device))
     
-    test_rho = 1.6023
-    print(f"\n--- Running Ground Truth Dense Grid Search for rho = {test_rho} ---")
+    test_rho = 1.6277
+
+    rho_core = 0.05
+    print(f"\n--- Running Ground Truth Dense Grid Search for Donut: {rho_core} <= rho <= {test_rho} ---")
     
     # Compute ground truth
-    gt_gamma = get_ground_truth_gamma(physics, model, test_rho, num_rays=10_000_000)
-    print(f" [GROUND TRUTH] Exact Max V_dot (gamma*): {gt_gamma:.6f}")
+    gt_gamma = get_ground_truth_gamma_volume(physics, model, test_rho, rho_core=rho_core, grid_size=4000)
+    print(f" [GROUND TRUTH] Exact Max V_dot in volume (gamma*): {gt_gamma:.6f}")
     
     # 2. Run EVT Certification over multiple random seeds to check the Confidence Interval
     print("\n--- Validating EVT Confidence Interval (99%) ---")
-    print(f"{'Seed':<10} | {'EVT Upper Bound (CI)':<20} | {'Condition (CI > GT?)':<20}")
-    print("-" * 55)
+    print(f"{'Seed':<10} | {'EVT Upper Bound (CI)':<20} | {'Condition (CI > GT?)':<20} | {'Failure Reason':<20}")
+    print("-" * 75)
     
-    test_seeds = list(np.arange(0, 1000))
+    # Run 500 certifications
+    test_seeds = list(np.arange(0, 500))
     
     # Trackers for the final statistics
     valid_count = 0
@@ -99,12 +94,21 @@ if __name__ == "__main__":
         old_stdout = sys.stdout
         sys.stdout = open(os.devnull, 'w')
         
-        # Run standard EVT certification
-        _, ci_upper, is_safe = certify_with_evt(physics, model, test_rho, n_samples=2000, tag="val")
+        # Capture the 4 return values from the updated certify_with_evt function
+        _, ci_upper, is_safe, reason = certify_with_evt(
+            physics, 
+            model, 
+            test_rho, 
+            n_samples=10000, 
+            block_size=100,
+            steps=1000,
+            tag="val"
+        )
         
         # Restore prints
         sys.stdout = old_stdout
         
+        # Check if the bound is conservative compared to our new volume ground-truth
         is_valid = ci_upper >= (gt_gamma - 1e-5)
         
         if is_valid:
@@ -114,18 +118,17 @@ if __name__ == "__main__":
             valid_str = "INVALID (Underestimated)"
             invalid_count += 1
             
-        # Optional: Comment out the print below if you don't want 10,000 lines flooding your terminal
-        print(f"{seed:<10} | {ci_upper:<20.6f} | {valid_str:<20}")
+        print(f"{seed:<10} | {ci_upper:<20.6f} | {valid_str:<20} | {reason:<20}")
         
     # --- Final Aggregation and Output ---
     total_seeds = len(test_seeds)
     success_rate = (valid_count / total_seeds) * 100
     
-    print("\n" + "="*55)
+    print("\n" + "="*75)
     print("FINAL EVT BENCHMARK RESULTS")
-    print("="*55)
+    print("="*75)
     print(f"Total Seeds Tested: {total_seeds}")
     print(f"Valid Bounds (Conservative): {valid_count}")
     print(f"Invalid Bounds (Underestimated): {invalid_count}")
     print(f"Empirical Success Rate: {success_rate:.2f}%")
-    print("="*55)
+    print("="*75)
