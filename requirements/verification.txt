@@ -1,0 +1,4 @@
+# Optional solvers for the historical NLF/ICNN/PINN/SOS experiments.
+-r ../requirements.txt
+drake==1.51.1
+dreal==4.21.6.2

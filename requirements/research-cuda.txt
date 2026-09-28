@@ -1,0 +1,8 @@
+# Original research environment (CUDA 12.8); platform-specific.
+--extra-index-url https://download.pytorch.org/whl/cu128
+drake==1.51.1
+dreal==4.21.6.2
+matplotlib==3.10.8
+numpy==2.2.6
+scipy==1.15.3
+torch==2.10.0+cu128

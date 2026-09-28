@@ -91,6 +91,7 @@ def train_lyapunov(n_epochs=2000, batch_size=200, lr=0.01, time_reverse=False):
         loss.backward()
         optimizer.step()
         scheduler.step()
+        loss_history.append(loss.item())
         
         if epoch % 500 == 0:
             print(f"Epoch {epoch} | Loss: {loss.item():.6f}")
@@ -184,7 +185,7 @@ if __name__ == "__main__":
     trained_model, _ = train_lyapunov()
     
     # 2. Save Model
-    # os.makedirs('models', exist_ok=True)
+    os.makedirs('models', exist_ok=True)
 
     # Save the state dictionary (weights)
     torch.save(trained_model.state_dict(), 'models/lyapunov_model.pth')

@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import math
+import torch.nn.functional as F
 
 # ==========================================
 # 1. ODE Dynamics: Van der Pol Oscillator
-#    dx/dt = y
-#    dy/dt = \mu(1 - x^2)y - x
+#    dx/dt = -y
+#    dy/dt = x + mu(x^2 - 1)y (reverse time)
 # ==========================================
 
 class VanDerPol:
@@ -23,7 +25,7 @@ class VanDerPol:
         y = u[:, 1:2]
         
         dx = -y
-        dy = x + (x**2 - 1) * y 
+        dy = x + self.mu * (x**2 - 1) * y
         
         return torch.cat([dx, dy], dim=1)
 
@@ -64,8 +66,9 @@ def construct_ode_monomials(u):
     p_poly = [x, y, x**2, x*y, y**2]
     
     # --- 2. "Leaky" Non-Polynomials ---
-    lc_x = torch.log(torch.cosh(x))
-    lc_y = torch.log(torch.cosh(y))
+    # log(cosh(t)) = t + softplus(-2t) - log(2), without cosh overflow.
+    lc_x = x + F.softplus(-2 * x) - math.log(2.0)
+    lc_y = y + F.softplus(-2 * y) - math.log(2.0)
     
     # B. Modulated Tanh (Interaction Terms)
     x_thy = x * torch.tanh(y)  # Acts like xy near 0, x*sgn(y) far away
@@ -79,8 +82,10 @@ def construct_ode_monomials(u):
 
 
 class ODEGramMatrixLyapunov(nn.Module):
-    def __init__(self, state_dim=2, feature_dim=5, device='cpu'):
+    def __init__(self, state_dim=2, feature_dim=10, device='cpu'):
         super().__init__()
+        if state_dim != 2 or feature_dim != 10:
+            raise ValueError("The Van der Pol feature map requires state_dim=2 and feature_dim=10")
         self.device = device
         
         # Initialize L close to Identity to ensure V starts convex (circular)
@@ -91,7 +96,7 @@ class ODEGramMatrixLyapunov(nn.Module):
         with torch.no_grad():
             self.L_factor.add_(torch.eye(feature_dim, device=device) * 0.1)
 
-        self.register_buffer('eye', torch.eye(feature_dim) * 1e-4)
+        self.register_buffer('eye', torch.eye(feature_dim, device=device) * 1e-4)
 
     def get_Q(self):
         L = self.L_factor

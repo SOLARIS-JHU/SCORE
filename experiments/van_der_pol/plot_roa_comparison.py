@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from scipy.integrate import solve_ivp
 from scipy.linalg import solve_continuous_are
-import sys
+from pathlib import Path as FilePath
 import torch.nn.functional as F
 import os
 
@@ -37,12 +37,13 @@ plt.rcParams.update({
 # ==========================================
 
 # --- A. EVT (Dict-Gram) Import Check ---
-evt_path = os.path.abspath("EVT/van_der_pol")
-if evt_path not in sys.path:
-    sys.path.append(evt_path)
+EXPERIMENT_DIR = FilePath(__file__).resolve().parent
 
 try:
-    from EVT.commons import ODEGramMatrixLyapunov
+    if __package__:
+        from .EVT.commons import ODEGramMatrixLyapunov
+    else:
+        from EVT.commons import ODEGramMatrixLyapunov
     EVT_DICT_GRAM_AVAILABLE = True
 except ImportError:
     EVT_DICT_GRAM_AVAILABLE = False
@@ -187,7 +188,7 @@ def main():
     V_poly_grid = V_polynomial_eval(X, Y)
 
     nlf_model = LyapunovFunction().to(device)
-    path_nlf = "NLF/vdp_lyapunov_params.pth"
+    path_nlf = EXPERIMENT_DIR / "NLF/vdp_lyapunov_params.pth"
     if os.path.exists(path_nlf):
         nlf_model.load_state_dict(torch.load(path_nlf, map_location=device))
         nlf_model.eval()
@@ -198,7 +199,7 @@ def main():
         V_nlf_grid = np.zeros_like(X)
 
     icnn_model = ICNN().to(device)
-    path_icnn = "ICNN/vdp_icnn_params.pth"
+    path_icnn = EXPERIMENT_DIR / "ICNN/vdp_icnn_params.pth"
     has_icnn = False
     if os.path.exists(path_icnn):
         icnn_model.load_state_dict(torch.load(path_icnn, map_location=device))
@@ -211,7 +212,7 @@ def main():
         V_icnn_grid = np.zeros_like(X)
 
     zubov_model = ZubovNetwork().to(device)
-    path_zubov = "PINN/zubov_model.pth"
+    path_zubov = EXPERIMENT_DIR / "PINN/zubov_model.pth"
     if os.path.exists(path_zubov):
         zubov_model.load_state_dict(torch.load(path_zubov, map_location=device))
         zubov_model.eval()
@@ -224,7 +225,7 @@ def main():
     if EVT_DICT_GRAM_AVAILABLE:
         try:
             evt_model = ODEGramMatrixLyapunov(state_dim=2, feature_dim=10, device=device).to(device)
-            path_evt = "EVT/models/lyapunov_model.pth"
+            path_evt = EXPERIMENT_DIR / "EVT/models/lyapunov_model.pth"
             if os.path.exists(path_evt):
                 evt_model.load_state_dict(torch.load(path_evt, map_location=device))
                 evt_model.eval()
@@ -389,8 +390,9 @@ def main():
               handlelength=3.0) 
     
     # Save
-    if not os.path.exists("plots"): os.makedirs("plots")
-    save_path = "plots/paper_roa_comparison_final_rsgld.pdf"
+    output_dir = EXPERIMENT_DIR / "plots"
+    output_dir.mkdir(exist_ok=True)
+    save_path = output_dir / "paper_roa_comparison_final_rsgld.pdf"
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     print(f"\nPlot saved to {save_path}")
 

@@ -26,3 +26,9 @@ faccenda.md
 /old_stuff*
 
 visual_abstract
+
+# Notebook and generated tutorial artifacts
+.ipynb_checkpoints/
+tutorials/outputs/
+.pytest_cache/
+.DS_Store
